@@ -21,6 +21,19 @@ array of panel definitions (type, key path, labels). Panel types: counter, toggl
 </head>
 <body class="bg-gray-100">
   <div id="app" class="grid grid-cols-1 md:grid-cols-3 gap-4 p-4"></div>
+
+  <div id="toastRoot" class="fixed bottom-4 right-4 space-y-2 z-50"></div>
+  <div id="modalRoot" class="fixed inset-0 hidden items-center justify-center bg-black/30 z-40">
+    <div class="bg-white rounded-xl shadow p-4 w-80">
+      <h3 id="modalTitle" class="font-semibold mb-2">Confirm</h3>
+      <p id="modalBody" class="text-sm text-gray-700 mb-3"></p>
+      <div class="flex justify-end gap-2">
+        <button id="modalCancel" type="button" class="chip-btn">Cancel</button>
+        <button id="modalOk" type="button" class="chip-btn">OK</button>
+      </div>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>
