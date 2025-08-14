@@ -1,0 +1,26 @@
+<!--
+README
+------
+This single-page app tracks a D&D 5e character. It uses TailwindCSS via CDN and vanilla JS.
+Structure:
+- index.html: layout and containers.
+- app.js: state management, rendering, and logic.
+- styles.css: minimal custom styles (optional).
+
+To add a new class panel, edit CLASS_CONFIG in app.js. Each entry maps a class name to an
+array of panel definitions (type, key path, labels). Panel types: counter, toggle, pool, static.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>D&D Character Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="bg-gray-100">
+  <div id="app" class="grid grid-cols-1 md:grid-cols-3 gap-4 p-4"></div>
+  <script src="app.js"></script>
+</body>
+</html>
