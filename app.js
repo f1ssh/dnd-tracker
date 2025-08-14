@@ -97,6 +97,7 @@ const CLASS_CONFIG = {
 };
 
 let character = loadCharacter();
+let ui = loadUI();
 
 // Utility helpers
 function abilityMod(score) {
@@ -132,14 +133,80 @@ function loadCharacter() {
   return JSON.parse(JSON.stringify(defaultCharacter));
 }
 
+let saveTimer;
 function saveCharacter() {
-  localStorage.setItem('dndCharacter', JSON.stringify(character));
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    localStorage.setItem('dndCharacter', JSON.stringify(character));
+  }, 150);
+}
+
+function loadUI() {
+  const saved = localStorage.getItem('dndUI');
+  return saved ? JSON.parse(saved) : { collapsed: {} };
+}
+
+function saveUI() {
+  localStorage.setItem('dndUI', JSON.stringify(ui));
+}
+
+function applyChange(mutator, logText) {
+  mutator();
+  if (logText) logAction(logText);
+  saveCharacter();
+  render();
 }
 
 function logAction(text) {
   const time = new Date().toLocaleTimeString();
   character.log.unshift(`${time} - ${text}`);
   character.log = character.log.slice(0, 20);
+}
+
+function panel(parentId, id, title) {
+  const parent = document.getElementById(parentId);
+  const wrapper = document.createElement('div');
+  wrapper.className = 'bg-white p-4 rounded-xl shadow border border-gray-100';
+  const collapsed = ui.collapsed[id];
+  wrapper.innerHTML = `
+    <h2 class="font-semibold text-gray-800 text-lg mb-3 flex items-center justify-between">
+      <span class="flex items-center gap-2"><span class="inline-block w-1.5 h-5 rounded bg-indigo-500"></span> ${title}</span>
+      <button type="button" class="chip-btn toggle" data-id="${id}">${collapsed ? '▸' : '▾'}</button>
+    </h2>
+    <div class="panel-body ${collapsed ? 'hidden' : ''}"></div>
+  `;
+  parent.appendChild(wrapper);
+  wrapper.querySelector('.toggle').addEventListener('click', e => {
+    const pid = e.target.dataset.id;
+    ui.collapsed[pid] = !ui.collapsed[pid];
+    saveUI();
+    render();
+  });
+  return wrapper.querySelector('.panel-body');
+}
+
+function toast(msg) {
+  const root = document.getElementById('toastRoot');
+  const t = document.createElement('div');
+  t.className = 'px-3 py-2 rounded-lg shadow bg-gray-900 text-white text-sm';
+  t.textContent = msg;
+  root.appendChild(t);
+  setTimeout(() => { t.remove(); }, 1600);
+}
+
+function confirmModal(title, body) {
+  return new Promise(resolve => {
+    const root = document.getElementById('modalRoot');
+    root.classList.remove('hidden');
+    root.classList.add('flex');
+    document.getElementById('modalTitle').textContent = title;
+    document.getElementById('modalBody').textContent = body;
+    const off = () => { root.classList.add('hidden'); root.classList.remove('flex'); };
+    const ok = () => { off(); resolve(true); };
+    const cancel = () => { off(); resolve(false); };
+    document.getElementById('modalOk').onclick = ok;
+    document.getElementById('modalCancel').onclick = cancel;
+  });
 }
 
 // Rendering
@@ -164,12 +231,9 @@ function render() {
 
 // Header panel
 function renderHeader() {
-  const left = document.getElementById('left');
-  const div = document.createElement('div');
-  div.className = 'bg-white p-4 rounded shadow';
+  const body = panel('left', 'header', 'Character');
   const classes = Object.keys(CLASS_CONFIG);
-  div.innerHTML = `
-    <h2 class="font-bold mb-2">Character</h2>
+  body.innerHTML = `
     <div class="grid grid-cols-2 gap-2">
       <label class="col-span-2">Name <input id="name" class="w-full border p-1" value="${character.identity.name}"></label>
       <label>Level <input id="level" type="number" min="1" max="20" class="w-full border p-1" value="${character.identity.level}"></label>
@@ -183,76 +247,100 @@ function renderHeader() {
       </label>
     </div>
   `;
-  left.appendChild(div);
 
-  div.querySelector('#name').addEventListener('input', e => { character.identity.name = e.target.value; saveCharacter(); });
-  div.querySelector('#race').addEventListener('input', e => { character.identity.race = e.target.value; saveCharacter(); });
-  div.querySelector('#background').addEventListener('input', e => { character.identity.background = e.target.value; saveCharacter(); });
-  div.querySelector('#alignment').addEventListener('input', e => { character.identity.alignment = e.target.value; saveCharacter(); });
-  div.querySelector('#level').addEventListener('change', e => {
+  body.querySelector('#name').addEventListener('input', e => { character.identity.name = e.target.value; saveCharacter(); });
+  body.querySelector('#race').addEventListener('input', e => { character.identity.race = e.target.value; saveCharacter(); });
+  body.querySelector('#background').addEventListener('input', e => { character.identity.background = e.target.value; saveCharacter(); });
+  body.querySelector('#alignment').addEventListener('input', e => { character.identity.alignment = e.target.value; saveCharacter(); });
+  body.querySelector('#level').addEventListener('change', e => {
     const lvl = clamp(parseInt(e.target.value)||1,1,20);
-    character.identity.level = lvl;
-    character.proficiencyBonus = proficiencyBonus(lvl);
-    saveCharacter();
-    render();
+    applyChange(() => {
+      character.identity.level = lvl;
+      character.proficiencyBonus = proficiencyBonus(lvl);
+    });
   });
-  div.querySelector('#class').addEventListener('change', e => {
-    character.identity.class = e.target.value;
-    saveCharacter();
-    render();
+  body.querySelector('#class').addEventListener('change', e => {
+    applyChange(() => { character.identity.class = e.target.value; });
   });
 }
 
 // HP panel
 function renderHP() {
-  const left = document.getElementById('left');
+  const body = panel('left', 'hp', 'Hit Points');
   const hp = character.combat.hp;
-  const div = document.createElement('div');
-  div.className = 'bg-white p-4 rounded shadow';
-  div.innerHTML = `
-    <h2 class="font-bold mb-2">Hit Points</h2>
+  const pct = hp.max ? hp.current / hp.max : 0;
+  let barColor = 'bg-green-500';
+  if (pct < 0.3) barColor = 'bg-red-500';
+  else if (pct < 0.6) barColor = 'bg-amber-500';
+  body.innerHTML = `
     <div class="flex items-center space-x-2 mb-2">
       <span>Current</span>
-      <button class="chip-btn" data-delta="-5">-5</button>
-      <button class="chip-btn" data-delta="-1">-1</button>
+      <button type="button" class="chip-btn" data-delta="-5">-5</button>
+      <button type="button" class="chip-btn" data-delta="-1">-1</button>
       <input id="currentHp" type="number" class="w-16 border p-1" value="${hp.current}">
-      <button class="chip-btn" data-delta="1">+1</button>
-      <button class="chip-btn" data-delta="5">+5</button>
+      <button type="button" class="chip-btn" data-delta="1">+1</button>
+      <button type="button" class="chip-btn" data-delta="5">+5</button>
     </div>
     <div>Max: <input id="maxHp" type="number" class="w-16 border p-1" value="${hp.max}"></div>
     <div>Temp: <input id="tempHp" type="number" class="w-16 border p-1" value="${hp.temp}"></div>
     <div class="mt-2">Hit Dice: <span id="hitDice">${character.combat.hitDice.remaining}/${character.combat.hitDice.total} ${character.combat.hitDice.die}</span>
-      <button id="hdMinus" class="chip-btn ml-2" data-delta="-1">-</button>
-      <button id="hdPlus" class="chip-btn" data-delta="1">+</button>
+      <button id="hdMinus" type="button" class="chip-btn ml-2" data-delta="-1">-</button>
+      <button id="hdPlus" type="button" class="chip-btn" data-delta="1">+</button>
+    </div>
+    <div class="mt-3">
+      <div class="h-2 bg-gray-200 rounded">
+        <div id="hpBar" class="h-2 rounded ${barColor}" style="width:${pct*100}%"></div>
+      </div>
+      <div class="text-xs text-gray-600 mt-1">${hp.current}/${hp.max} (+${hp.temp} temp)</div>
     </div>
   `;
-  left.appendChild(div);
 
-  div.querySelectorAll('button[data-delta]').forEach(btn => {
+  const pulse = () => {
+    const inp = body.querySelector('#currentHp');
+    inp.classList.add('pulse-change');
+    setTimeout(() => inp.classList.remove('pulse-change'), 400);
+  };
+
+  body.querySelectorAll('button[data-delta]').forEach(btn => {
     btn.addEventListener('click', e => {
       const delta = parseInt(e.target.dataset.delta);
-      hp.current = clamp(hp.current + delta, 0, hp.max);
-      logAction(`${delta>0?'+':''}${delta} HP`);
-      saveCharacter();
-      renderHP();
-      renderLog();
+      applyChange(() => {
+        hp.current = clamp(hp.current + delta, 0, hp.max);
+      }, `${delta>0?'+':''}${delta} HP`);
+      pulse();
     });
   });
-  div.querySelector('#currentHp').addEventListener('change', e => { hp.current = clamp(parseInt(e.target.value)||0,0,hp.max); saveCharacter(); renderHP(); });
-  div.querySelector('#maxHp').addEventListener('change', e => { hp.max = parseInt(e.target.value)||1; hp.current = clamp(hp.current,0,hp.max); saveCharacter(); renderHP(); });
-  div.querySelector('#tempHp').addEventListener('change', e => { hp.temp = parseInt(e.target.value)||0; saveCharacter(); });
-  div.querySelector('#hdMinus').addEventListener('click', () => { const hd = character.combat.hitDice; hd.remaining = clamp(hd.remaining-1,0,hd.total); saveCharacter(); renderHP(); });
-  div.querySelector('#hdPlus').addEventListener('click', () => { const hd = character.combat.hitDice; hd.remaining = clamp(hd.remaining+1,0,hd.total); saveCharacter(); renderHP(); });
+  body.querySelector('#currentHp').addEventListener('change', e => {
+    const val = clamp(parseInt(e.target.value)||0,0,hp.max);
+    applyChange(() => { hp.current = val; });
+    pulse();
+  });
+  body.querySelector('#maxHp').addEventListener('change', e => {
+    const val = parseInt(e.target.value)||1;
+    applyChange(() => {
+      hp.max = val;
+      hp.current = clamp(hp.current,0,hp.max);
+    });
+  });
+  body.querySelector('#tempHp').addEventListener('change', e => {
+    const val = parseInt(e.target.value)||0;
+    applyChange(() => { hp.temp = val; });
+  });
+  body.querySelector('#hdMinus').addEventListener('click', () => {
+    const hd = character.combat.hitDice;
+    applyChange(() => { hd.remaining = clamp(hd.remaining-1,0,hd.total); });
+  });
+  body.querySelector('#hdPlus').addEventListener('click', () => {
+    const hd = character.combat.hitDice;
+    applyChange(() => { hd.remaining = clamp(hd.remaining+1,0,hd.total); });
+  });
 }
 
 function renderCombat() {
-  const left = document.getElementById('left');
+  const body = panel('left', 'combat', 'Combat');
   const c = character.combat;
-  const div = document.createElement('div');
-  div.className = 'bg-white p-4 rounded shadow';
   const passive = abilityMod(character.abilities.WIS) + 10 + (character.skills['Perception']?.prof?character.proficiencyBonus*(character.skills['Perception'].expertise?2:1):0);
-  div.innerHTML = `
-    <h2 class="font-bold mb-2">Combat</h2>
+  body.innerHTML = `
     <div class="grid grid-cols-2 gap-2">
       <label>AC <input id="ac" type="number" class="w-full border p-1" value="${c.ac}"></label>
       <label>Initiative <input id="init" type="number" class="w-full border p-1" value="${c.initiative}"></label>
@@ -260,25 +348,21 @@ function renderCombat() {
       <div>Passive Perception <span>${passive}</span></div>
     </div>
     <div class="mt-2 flex space-x-2">
-      <button id="shortRest" class="chip-btn">Short Rest</button>
-      <button id="longRest" class="chip-btn">Long Rest</button>
+      <button id="shortRest" type="button" class="chip-btn">Short Rest</button>
+      <button id="longRest" type="button" class="chip-btn">Long Rest</button>
     </div>
   `;
-  left.appendChild(div);
 
-  div.querySelector('#ac').addEventListener('change', e => { c.ac = parseInt(e.target.value)||0; saveCharacter(); });
-  div.querySelector('#init').addEventListener('change', e => { c.initiative = parseInt(e.target.value)||0; saveCharacter(); });
-  div.querySelector('#speed').addEventListener('change', e => { c.speed = parseInt(e.target.value)||0; saveCharacter(); });
-  div.querySelector('#shortRest').addEventListener('click', shortRest);
-  div.querySelector('#longRest').addEventListener('click', longRest);
+  body.querySelector('#ac').addEventListener('change', e => { c.ac = parseInt(e.target.value)||0; saveCharacter(); });
+  body.querySelector('#init').addEventListener('change', e => { c.initiative = parseInt(e.target.value)||0; saveCharacter(); });
+  body.querySelector('#speed').addEventListener('change', e => { c.speed = parseInt(e.target.value)||0; saveCharacter(); });
+  body.querySelector('#shortRest').addEventListener('click', shortRest);
+  body.querySelector('#longRest').addEventListener('click', longRest);
 }
 
 // Abilities and saves
 function renderAbilities() {
-  const mid = document.getElementById('middle');
-  const div = document.createElement('div');
-  div.className = 'bg-white p-4 rounded shadow';
-  div.innerHTML = `<h2 class="font-bold mb-2">Abilities & Saves</h2>`;
+  const body = panel('middle', 'abilities', 'Abilities & Saves');
   const table = document.createElement('table');
   table.className = 'w-full text-center';
   table.innerHTML = `<tr><th>Ability</th><th>Score</th><th>Mod</th><th>Save</th></tr>`;
@@ -296,40 +380,31 @@ function renderAbilities() {
     `;
     table.appendChild(row);
   });
-  div.appendChild(table);
-  mid.appendChild(div);
+  body.appendChild(table);
 
-  div.querySelectorAll('input[data-ab]').forEach(inp => {
+  body.querySelectorAll('input[data-ab]').forEach(inp => {
     inp.addEventListener('change', e => {
       const ab = e.target.dataset.ab;
-      character.abilities[ab] = parseInt(e.target.value)||0;
-      saveCharacter();
-      render();
+      applyChange(() => { character.abilities[ab] = parseInt(e.target.value)||0; });
     });
   });
-  div.querySelectorAll('input[data-save]').forEach(inp => {
+  body.querySelectorAll('input[data-save]').forEach(inp => {
     inp.addEventListener('change', e => {
       const ab = e.target.dataset.save;
-      character.saves[ab] = e.target.checked;
-      saveCharacter();
-      renderAbilities();
+      applyChange(() => { character.saves[ab] = e.target.checked; });
     });
   });
 }
 
 // Skills
 function renderSkills() {
-  const mid = document.getElementById('middle');
-  const div = document.createElement('div');
-  div.className = 'bg-white p-4 rounded shadow';
-  div.innerHTML = `<h2 class="font-bold mb-2">Skills</h2>
-    <input id="skillSearch" placeholder="Search" class="w-full border p-1 mb-2">
+  const body = panel('middle', 'skills', 'Skills');
+  body.innerHTML = `<input id="skillSearch" placeholder="Search" class="w-full border p-1 mb-2">
     <div id="skillList" class="space-y-1"></div>`;
-  mid.appendChild(div);
-  const list = div.querySelector('#skillList');
+  const list = body.querySelector('#skillList');
   const renderList = () => {
     list.innerHTML = '';
-    const filter = div.querySelector('#skillSearch').value.toLowerCase();
+    const filter = body.querySelector('#skillSearch').value.toLowerCase();
     SKILLS.filter(s => s.name.toLowerCase().includes(filter)).forEach(skill => {
       if(!character.skills[skill.name]) character.skills[skill.name] = { prof:false, expertise:false };
       const data = character.skills[skill.name];
@@ -347,24 +422,21 @@ function renderSkills() {
     });
   };
   renderList();
-  div.querySelector('#skillSearch').addEventListener('input', renderList);
+  body.querySelector('#skillSearch').addEventListener('input', renderList);
   list.addEventListener('change', e => {
     const skill = e.target.dataset.skill;
     const type = e.target.dataset.type;
-    if(type==='prof') character.skills[skill].prof = e.target.checked;
-    if(type==='exp') character.skills[skill].expertise = e.target.checked;
-    saveCharacter();
-    renderList();
+    applyChange(() => {
+      if(type==='prof') character.skills[skill].prof = e.target.checked;
+      if(type==='exp') character.skills[skill].expertise = e.target.checked;
+    });
   });
 }
 
 // Class panels
 function renderClassPanels() {
-  const right = document.getElementById('right');
+  const body = panel('right', 'classPanels', `${character.identity.class} Features`);
   const conf = CLASS_CONFIG[character.identity.class];
-  const div = document.createElement('div');
-  div.className = 'bg-white p-4 rounded shadow';
-  div.innerHTML = `<h2 class="font-bold mb-2">${character.identity.class} Features</h2>`;
   conf.panels.forEach(p => {
     const container = document.createElement('div');
     container.className = 'mb-2';
@@ -375,9 +447,9 @@ function renderClassPanels() {
         <div class="flex items-center justify-between">
           <span>${p.label}</span>
           <span>
-            <button class="chip-btn" data-key="${p.key}" data-delta="-1">-</button>
+            <button type="button" class="chip-btn" data-key="${p.key}" data-delta="-1">-</button>
             <span class="mx-2">${remaining}/${obj.max}</span>
-            <button class="chip-btn" data-key="${p.key}" data-delta="1">+</button>
+            <button type="button" class="chip-btn" data-key="${p.key}" data-delta="1">+</button>
           </span>
         </div>
       `;
@@ -396,44 +468,39 @@ function renderClassPanels() {
     } else if(p.type === 'static') {
       container.textContent = p.label;
     }
-    div.appendChild(container);
+    body.appendChild(container);
   });
-  right.appendChild(div);
 
-  div.querySelectorAll('button[data-key]').forEach(btn => {
+  body.querySelectorAll('button[data-key]').forEach(btn => {
     btn.addEventListener('click', e => {
       const key = e.target.dataset.key;
       const delta = parseInt(e.target.dataset.delta);
       const obj = getByPath(character, key);
-      obj.used = clamp((obj.used||0) - delta, 0, obj.max);
-      saveCharacter();
-      renderClassPanels();
+      const prevUsed = obj.used || 0;
+      const remaining = obj.max - prevUsed;
+      const newRemaining = clamp(remaining + delta, 0, obj.max);
+      applyChange(() => { obj.used = obj.max - newRemaining; });
     });
   });
-  div.querySelectorAll('input[type=checkbox][data-key]').forEach(cb => {
+  body.querySelectorAll('input[type=checkbox][data-key]').forEach(cb => {
     cb.addEventListener('change', e => {
-      setByPath(character, e.target.dataset.key, e.target.checked);
-      saveCharacter();
+      applyChange(() => { setByPath(character, e.target.dataset.key, e.target.checked); });
     });
   });
-  div.querySelectorAll('input[type=number][data-key]').forEach(inp => {
+  body.querySelectorAll('input[type=number][data-key]').forEach(inp => {
     inp.addEventListener('change', e => {
-      setByPath(character, e.target.dataset.key, parseInt(e.target.value)||0);
-      saveCharacter();
-      renderClassPanels();
+      const val = parseInt(e.target.value)||0;
+      applyChange(() => { setByPath(character, e.target.dataset.key, val); });
     });
   });
 }
 
 // Spell slots
 function renderSpells() {
-  const right = document.getElementById('right');
   const isCaster = CLASS_CONFIG[character.identity.class].caster || character.spells.casterType !== 'none';
   if(!isCaster) return;
-  const div = document.createElement('div');
-  div.className = 'bg-white p-4 rounded shadow';
-  div.innerHTML = `<h2 class="font-bold mb-2">Spell Slots</h2>`;
-  const slotLevels = Object.keys(character.spells.slots).sort();
+  const body = panel('right', 'spells', 'Spell Slots');
+  const slotLevels = Object.keys(character.spells.slots).sort((a,b)=>a-b);
   slotLevels.forEach(lvl => {
     const slot = character.spells.slots[lvl];
     const container = document.createElement('div');
@@ -441,79 +508,90 @@ function renderSpells() {
     container.innerHTML = `
       <span>Level ${lvl}</span>
       <span>
-        <button class="chip-btn" data-level="${lvl}" data-delta="-1">-</button>
+        <button type="button" class="chip-btn" data-level="${lvl}" data-delta="-1">-</button>
         <span class="mx-2">${slot.max - slot.used}/${slot.max}</span>
-        <button class="chip-btn" data-level="${lvl}" data-delta="1">+</button>
+        <button type="button" class="chip-btn" data-level="${lvl}" data-delta="1">+</button>
       </span>
     `;
-    div.appendChild(container);
+    body.appendChild(container);
   });
-  right.appendChild(div);
+  body.innerHTML += `<div class="mt-2 space-x-2"><button id="editSlots" type="button" class="chip-btn">Edit Slots</button><button id="resetSlots" type="button" class="chip-btn">Reset</button></div>`;
 
-  div.querySelectorAll('button[data-level]').forEach(btn => {
+  body.querySelectorAll('button[data-level]').forEach(btn => {
     btn.addEventListener('click', e => {
       const lvl = e.target.dataset.level;
       const delta = parseInt(e.target.dataset.delta);
       const slot = character.spells.slots[lvl];
-      slot.used = clamp(slot.used - delta, 0, slot.max);
-      saveCharacter();
-      renderSpells();
+      const prevUsed = slot.used || 0;
+      const remaining = slot.max - prevUsed;
+      const newRemaining = clamp(remaining + delta, 0, slot.max);
+      applyChange(() => { slot.used = slot.max - newRemaining; });
+    });
+  });
+  const edit = body.querySelector('#editSlots');
+  if(edit) edit.addEventListener('click', () => {
+    const lvl = parseInt(prompt('Slot level (1-9)?'), 10);
+    const max = parseInt(prompt('Max slots?'), 10);
+    if(!lvl || !max) return;
+    applyChange(() => {
+      if(!character.spells.slots[lvl]) character.spells.slots[lvl] = { max: max, used: 0 };
+      else character.spells.slots[lvl].max = max;
+    });
+  });
+  const reset = body.querySelector('#resetSlots');
+  if(reset) reset.addEventListener('click', () => {
+    applyChange(() => {
+      Object.values(character.spells.slots).forEach(s => s.used = 0);
     });
   });
 }
 
 // Notes & conditions
 function renderNotes() {
-  const right = document.getElementById('right');
-  const div = document.createElement('div');
-  div.className = 'bg-white p-4 rounded shadow';
+  const body = panel('right', 'notes', 'Notes & Conditions');
   const conds = ["Blinded","Charmed","Deafened","Frightened","Grappled","Incapacitated","Invisible","Paralyzed","Petrified","Poisoned","Prone","Restrained","Stunned","Unconscious"];
-  div.innerHTML = `<h2 class="font-bold mb-2">Notes & Conditions</h2>
+  body.innerHTML = `
     <div class="grid grid-cols-2 gap-1 mb-2">
       ${conds.map(c=>`<label><input type="checkbox" data-cond="${c}" ${character.combat.conditions.includes(c)?'checked':''}/> ${c}</label>`).join('')}
     </div>
     <textarea id="notes" class="w-full border p-1" rows="4" placeholder="Notes">${character.notes}</textarea>`;
-  right.appendChild(div);
-  div.querySelector('#notes').addEventListener('input', e => { character.notes = e.target.value; saveCharacter(); });
-  div.querySelectorAll('input[data-cond]').forEach(cb => {
+  body.querySelector('#notes').addEventListener('input', e => { applyChange(() => { character.notes = e.target.value; }); });
+  body.querySelectorAll('input[data-cond]').forEach(cb => {
     cb.addEventListener('change', e => {
       const cond = e.target.dataset.cond;
-      if(e.target.checked) { if(!character.combat.conditions.includes(cond)) character.combat.conditions.push(cond); }
-      else { character.combat.conditions = character.combat.conditions.filter(c=>c!==cond); }
-      saveCharacter();
+      applyChange(() => {
+        if(e.target.checked) {
+          if(!character.combat.conditions.includes(cond)) character.combat.conditions.push(cond);
+        } else {
+          character.combat.conditions = character.combat.conditions.filter(c=>c!==cond);
+        }
+      });
     });
   });
 }
 
 // Dice roller
 function renderDice() {
-  const left = document.getElementById('left');
-  const div = document.createElement('div');
-  div.className = 'bg-white p-4 rounded shadow';
-  div.innerHTML = `<h2 class="font-bold mb-2">Dice Roller</h2>
+  const body = panel('left', 'dicePanel', 'Dice Roller');
+  body.innerHTML = `
     <div class="mb-2">
       <label><input type="checkbox" id="adv"> Advantage</label>
       <label class="ml-2"><input type="checkbox" id="dis"> Disadvantage</label>
     </div>
     <div class="space-x-1 mb-2">
-      ${[4,6,8,10,12,20].map(d=>`<button class="chip-btn" data-die="${d}">d${d}</button>`).join('')}
+      ${[4,6,8,10,12,20].map(d=>`<button type="button" class="chip-btn" data-die="${d}">d${d}</button>`).join('')}
     </div>
     <div id="diceLog" class="text-sm h-24 overflow-y-auto border p-1 bg-gray-50"></div>`;
-  left.appendChild(div);
-  const logDiv = div.querySelector('#diceLog');
-  const renderLog = () => { logDiv.innerHTML = character.log.map(l=>`<div>${l}</div>`).join(''); };
-  renderLog();
-  div.querySelectorAll('button[data-die]').forEach(btn => {
+  const logDiv = body.querySelector('#diceLog');
+  logDiv.innerHTML = character.log.map(l=>`<div>${l}</div>`).join('');
+  body.querySelectorAll('button[data-die]').forEach(btn => {
     btn.addEventListener('click', e => {
       const die = parseInt(e.target.dataset.die);
       let rolls = [rollDie(die)];
-      if(div.querySelector('#adv').checked) rolls.push(rollDie(die));
-      if(div.querySelector('#dis').checked) rolls.push(rollDie(die));
-      const result = div.querySelector('#adv').checked ? Math.max(...rolls) : div.querySelector('#dis').checked ? Math.min(...rolls) : rolls[0];
-      logAction(`Rolled d${die}: ${result}${rolls.length>1?` [${rolls.join(',')}]`:''}`);
-      saveCharacter();
-      renderDice();
-      renderLog();
+      if(body.querySelector('#adv').checked) rolls.push(rollDie(die));
+      if(body.querySelector('#dis').checked) rolls.push(rollDie(die));
+      const result = body.querySelector('#adv').checked ? Math.max(...rolls) : body.querySelector('#dis').checked ? Math.min(...rolls) : rolls[0];
+      applyChange(() => {}, `Rolled d${die}: ${result}${rolls.length>1?` [${rolls.join(',')}]`:''}`);
     });
   });
 }
@@ -522,14 +600,11 @@ function rollDie(sides) { return Math.floor(Math.random()*sides)+1; }
 
 // Import/Export
 function renderImportExport() {
-  const left = document.getElementById('left');
-  const div = document.createElement('div');
-  div.className = 'bg-white p-4 rounded shadow';
-  div.innerHTML = `<h2 class="font-bold mb-2">Import / Export</h2>
-    <button id="exportBtn" class="chip-btn">Export</button>
+  const body = panel('left', 'impex', 'Import / Export');
+  body.innerHTML = `
+    <button id="exportBtn" type="button" class="chip-btn">Export</button>
     <label class="chip-btn ml-2 cursor-pointer">Import<input id="importFile" type="file" class="hidden" accept="application/json"></label>`;
-  left.appendChild(div);
-  div.querySelector('#exportBtn').addEventListener('click', () => {
+  body.querySelector('#exportBtn').addEventListener('click', () => {
     const data = JSON.stringify(character, null, 2);
     const blob = new Blob([data], {type:'application/json'});
     const a = document.createElement('a');
@@ -537,7 +612,7 @@ function renderImportExport() {
     a.download = (character.identity.name||'character') + '.json';
     a.click();
   });
-  div.querySelector('#importFile').addEventListener('change', e => {
+  body.querySelector('#importFile').addEventListener('change', e => {
     const file = e.target.files[0];
     if(!file) return;
     const reader = new FileReader();
@@ -550,61 +625,65 @@ function renderImportExport() {
 }
 
 function renderLog() {
-  const right = document.getElementById('right');
-  const div = document.createElement('div');
-  div.className = 'bg-white p-4 rounded shadow';
-  div.innerHTML = `<h2 class="font-bold mb-2">Action Log</h2><div class="h-32 overflow-y-auto">${character.log.map(l=>`<div>${l}</div>`).join('')}</div>`;
-  right.appendChild(div);
+  const body = panel('right', 'actionLog', 'Action Log');
+  body.innerHTML = `<div class="h-32 overflow-y-auto">${character.log.map(l=>`<div>${l}</div>`).join('')}</div>`;
 }
 
 // Rest logic
-function shortRest() {
-  if(!confirm('Take a short rest?')) return;
-  // reset short rest resources
-  Object.values(CLASS_CONFIG).forEach(conf => {
-    conf.panels.forEach(p => {
-      if(p.per === 'Short Rest') {
-        const obj = getByPath(character, p.key);
-        if(p.type === 'counter') obj.used = 0;
-        if(p.type === 'toggle') setByPath(character, p.key, true);
-        if(p.type === 'pool') obj.remaining = obj.max;
-      }
+async function shortRest() {
+  if(!(await confirmModal('Short Rest','Recover short-rest features?'))) return;
+  applyChange(() => {
+    Object.values(CLASS_CONFIG).forEach(conf => {
+      conf.panels.forEach(p => {
+        if(p.per === 'Short Rest') {
+          const obj = getByPath(character, p.key);
+          if(p.type === 'counter') obj.used = 0;
+          if(p.type === 'toggle') setByPath(character, p.key, true);
+          if(p.type === 'pool') obj.remaining = obj.max;
+        }
+      });
     });
-  });
-  saveCharacter();
-  logAction('Took a short rest');
-  render();
+  }, 'Took a short rest');
+  toast('Short rest complete');
 }
 
-function longRest() {
-  if(!confirm('Take a long rest?')) return;
-  Object.values(CLASS_CONFIG).forEach(conf => {
-    conf.panels.forEach(p => {
-      if(p.per === 'Long Rest') {
-        const obj = getByPath(character, p.key);
-        if(p.type === 'counter') obj.used = 0;
-        if(p.type === 'toggle') setByPath(character, p.key, true);
-        if(p.type === 'pool') obj.remaining = obj.max;
-      }
-      if(p.per === 'Short Rest') {
-        const obj = getByPath(character, p.key);
-        if(p.type === 'counter') obj.used = 0;
-        if(p.type === 'toggle') setByPath(character, p.key, true);
-        if(p.type === 'pool') obj.remaining = obj.max;
-      }
+async function longRest() {
+  if(!(await confirmModal('Long Rest','Recover all features and hit points?'))) return;
+  applyChange(() => {
+    Object.values(CLASS_CONFIG).forEach(conf => {
+      conf.panels.forEach(p => {
+        if(p.per === 'Long Rest' || p.per === 'Short Rest') {
+          const obj = getByPath(character, p.key);
+          if(p.type === 'counter') obj.used = 0;
+          if(p.type === 'toggle') setByPath(character, p.key, true);
+          if(p.type === 'pool') obj.remaining = obj.max;
+        }
+      });
     });
-  });
-  // restore HP
-  character.combat.hp.current = character.combat.hp.max;
-  character.combat.hp.temp = 0;
-  // recover half hit dice
-  const hd = character.combat.hitDice;
-  const recover = Math.floor((hd.total - hd.remaining)/2);
-  hd.remaining = clamp(hd.remaining + recover, 0, hd.total);
-  saveCharacter();
-  logAction('Took a long rest');
-  render();
+    character.combat.hp.current = character.combat.hp.max;
+    character.combat.hp.temp = 0;
+    const hd = character.combat.hitDice;
+    const recover = Math.floor((hd.total - hd.remaining)/2);
+    hd.remaining = clamp(hd.remaining + recover, 0, hd.total);
+  }, 'Took a long rest');
+  toast('Long rest complete');
 }
+
+document.addEventListener('keydown', e => {
+  if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  const key = e.key.toLowerCase();
+  if(key === 'h') {
+    const hpInput = document.getElementById('currentHp');
+    if(hpInput) hpInput.focus();
+  } else if(key === 'r') {
+    shortRest();
+  } else if(key === 'l') {
+    longRest();
+  } else if(key === 'd') {
+    const dice = document.getElementById('dicePanel');
+    if(dice) dice.scrollIntoView({behavior:'smooth'});
+  }
+});
 
 // Initial render
 render();
