@@ -3,30 +3,49 @@ input[type=number] { -moz-appearance:textfield; }
 input[type=number]::-webkit-inner-spin-button,
 input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 
-.chip-btn {
-  padding: 0.375rem 0.75rem;
-  border-radius: 9999px;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
-  transition: transform .05s ease, background .15s ease;
-}
-.chip-btn:hover { background: #e5e7eb; }
-.chip-btn:active { transform: translateY(1px); }
-
-.pulse-change { animation: pulse 400ms ease; }
-@keyframes pulse {
-  0% { background: #fef3c7; }
-  100% { background: transparent; }
-}
-
+/* ---- Controls ---- */
 .input {
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
-  border: 1px solid #d1d5db;
-  background-color: #fff;
+  padding: 0.375rem 0.5rem;
+  border-radius: 0.5rem;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  transition: box-shadow .15s, border-color .15s;
 }
 .input:focus {
   outline: none;
   border-color: #6366f1;
-  box-shadow: 0 0 0 2px rgba(99,102,241,0.5);
+  box-shadow: 0 0 0 3px rgba(99,102,241,.25);
 }
+
+.chip-btn {
+  padding: 0.35rem 0.7rem;
+  border-radius: 9999px;
+  border: 1px solid #e5e7eb;
+  background: #f3f4f6;
+  transition: transform .05s ease, background .15s ease, border-color .15s ease;
+}
+.chip-btn:hover { background:#e5e7eb; }
+.chip-btn:active { transform: translateY(1px); }
+.chip-btn:focus { outline: none; box-shadow: 0 0 0 3px rgba(99,102,241,.25); }
+
+/* ---- Micro-interactions ---- */
+.pulse-change { animation: pulse-bg 420ms ease; }
+@keyframes pulse-bg {
+  0%   { background: #fef3c7; }
+  100% { background: transparent; }
+}
+
+/* ---- Collapsible animation (max-height trick) ---- */
+.collapsible {
+  overflow: hidden;
+  transition: max-height .25s ease, opacity .2s ease;
+}
+.collapsible.collapsed {
+  max-height: 0 !important;
+  opacity: 0;
+}
+
+/* ---- Dark mode tweaks (Tailwind "class" mode) ---- */
+:root { color-scheme: light dark; }
+.dark .input { border-color:#334155; background:#0b1220; color:#e5e7eb; }
+.dark .chip-btn { background:#0f172a; border-color:#1f2937; color:#e5e7eb; }
