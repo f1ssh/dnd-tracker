@@ -9,12 +9,26 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
   border-radius: 0.5rem;
   border: 1px solid #e5e7eb;
   background: #fff;
+  color: #111827;
   transition: box-shadow .15s, border-color .15s;
 }
 .input:focus {
   outline: none;
   border-color: #6366f1;
   box-shadow: 0 0 0 3px rgba(99,102,241,.25);
+}
+
+/* Restore native look */
+input[type="checkbox"] {
+  appearance: auto;
+  -webkit-appearance: checkbox;
+  -moz-appearance: checkbox;
+  accent-color: #4f46e5;
+}
+
+/* High-contrast color in dark mode */
+.dark input[type="checkbox"] {
+  accent-color: #a5b4fc;
 }
 
 .chip-btn {

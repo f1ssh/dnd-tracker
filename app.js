@@ -98,6 +98,25 @@ const CLASS_CONFIG = {
 
 let character = loadCharacter();
 
+function setTheme(mode) {
+  const root = document.documentElement;
+  if (mode === 'dark') root.classList.add('dark');
+  else root.classList.remove('dark');
+  localStorage.setItem('theme', mode);
+}
+
+function initTheme() {
+  const saved = localStorage.getItem('theme') || 'light';
+  setTheme(saved);
+  const btn = document.getElementById('themeToggle');
+  if (btn) {
+    btn.onclick = () => {
+      const next = document.documentElement.classList.contains('dark') ? 'light' : 'dark';
+      setTheme(next);
+    };
+  }
+}
+
 // Utility helpers
 function abilityMod(score) {
   return Math.floor((score - 10) / 2);
@@ -164,9 +183,9 @@ function panelWrap(id, title, bodyHTML, opts = {}) {
   const { span = 'col-span-1 md:col-span-1 xl:col-span-1', order = '' } = opts;
   return el(`
     <section id="${id}" class="${span} ${order} min-w-0">
-      <div class="bg-white p-4 rounded-xl shadow border border-gray-100">
-        <h2 class="font-semibold text-gray-800 text-lg mb-3">${title}</h2>
-        <div class="panel-body">${bodyHTML}</div>
+      <div class="bg-white dark:bg-slate-900 p-4 rounded-xl shadow border border-gray-100 dark:border-slate-800">
+        <h2 class="font-semibold text-gray-800 dark:text-slate-100 text-lg mb-3">${title}</h2>
+        <div class="panel-body text-gray-700 dark:text-slate-200">${bodyHTML}</div>
       </div>
     </section>
   `);
@@ -175,7 +194,7 @@ function panelWrap(id, title, bodyHTML, opts = {}) {
 function toast(msg) {
   const root = document.getElementById('toastRoot');
   const t = document.createElement('div');
-  t.className = 'px-3 py-2 rounded-lg shadow bg-gray-900 text-white text-sm';
+  t.className = 'px-3 py-2 rounded-lg shadow bg-gray-900 text-slate-100 text-sm';
   t.textContent = msg;
   root.appendChild(t);
   setTimeout(() => { t.remove(); }, 1600);
@@ -238,11 +257,11 @@ function buildHPPanel() {
   const barColor = pct >= 60 ? 'bg-green-500' : pct >= 30 ? 'bg-amber-500' : 'bg-red-500';
   const html = `
     <div class="flex flex-wrap items-center gap-3">
-      <div class="text-sm text-gray-600">Max</div>
+      <div class="text-sm text-gray-600 dark:text-slate-300">Max</div>
       <input id="hpMax" type="number" class="w-20 input" value="${hp.max}">
-      <div class="text-sm text-gray-600">Current</div>
+      <div class="text-sm text-gray-600 dark:text-slate-300">Current</div>
       <input id="hpCur" type="number" class="w-20 input" value="${hp.current}">
-      <div class="text-sm text-gray-600">Temp</div>
+      <div class="text-sm text-gray-600 dark:text-slate-300">Temp</div>
       <input id="hpTemp" type="number" class="w-20 input" value="${hp.temp}">
       <div class="flex items-center gap-1 ml-auto">
         <button type="button" class="chip-btn" data-d="-5">−5</button>
@@ -256,7 +275,7 @@ function buildHPPanel() {
       <div class="h-2 bg-gray-200 rounded">
         <div class="h-2 rounded ${barColor}" style="width:${pct}%"></div>
       </div>
-      <div class="text-xs text-gray-600 mt-1">${hp.current}/${hp.max} (+${hp.temp} temp)</div>
+      <div class="text-xs text-gray-600 dark:text-slate-300 mt-1">${hp.current}/${hp.max} (+${hp.temp} temp)</div>
     </div>
 
     <div class="mt-3">Hit Dice: <span id="hitDice">${character.combat.hitDice.remaining}/${character.combat.hitDice.total} ${character.combat.hitDice.die}</span>
@@ -664,5 +683,7 @@ document.addEventListener('keydown', e => {
   }
 });
 
-// Initial render
-render();
+document.addEventListener('DOMContentLoaded', () => {
+  initTheme();
+  render();
+});
