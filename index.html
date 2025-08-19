@@ -17,9 +17,12 @@ array of panel definitions (type, key path, labels). Panel types: counter, toggl
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>D&D Character Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { darkMode: 'class' };
+  </script>
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body class="bg-gray-50">
+<body class="bg-gray-50 text-gray-800 dark:text-slate-100">
     <div class="min-h-screen">
       <header class="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur border-b border-gray-200 dark:border-slate-700">
         <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -41,9 +44,9 @@ array of panel definitions (type, key path, labels). Panel types: counter, toggl
     <div id="toastRoot" class="fixed bottom-4 right-4 space-y-2 z-50" aria-live="polite"></div>
 
     <div id="modalRoot" class="fixed inset-0 hidden items-center justify-center bg-black/30 z-40">
-      <div class="bg-white dark:bg-slate-900 rounded-xl shadow p-4 w-80 border border-gray-200 dark:border-slate-700">
+      <div class="bg-white dark:bg-slate-900 rounded-xl shadow p-4 w-80 border border-gray-100 dark:border-slate-800">
         <h3 id="modalTitle" class="font-semibold mb-2 text-gray-900 dark:text-slate-100">Confirm</h3>
-        <p id="modalBody" class="text-sm text-gray-700 dark:text-slate-300 mb-3"></p>
+        <p id="modalBody" class="text-sm text-gray-700 dark:text-slate-200 mb-3"></p>
         <div class="flex justify-end gap-2">
           <button id="modalCancel" type="button" class="chip-btn">Cancel</button>
           <button id="modalOk" type="button" class="chip-btn">OK</button>
