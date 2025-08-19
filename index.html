@@ -19,8 +19,21 @@ array of panel definitions (type, key path, labels). Panel types: counter, toggl
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body class="bg-gray-100">
-  <div id="app" class="grid grid-cols-1 md:grid-cols-3 gap-4 p-4"></div>
+<body class="bg-gray-50">
+  <div class="min-h-screen">
+    <header class="sticky top-0 z-40 bg-white/80 backdrop-blur border-b border-gray-200">
+      <div class="max-w-7xl mx-auto px-4 py-3">
+        <h1 class="text-xl font-semibold text-gray-800">D&D Character Tracker</h1>
+      </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 py-6">
+      <!-- Responsive grid: 1 col (phone), 2 cols (md), 3 cols (xl) -->
+      <div id="grid"
+           class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 auto-rows-max">
+      </div>
+    </main>
+  </div>
 
   <div id="toastRoot" class="fixed bottom-4 right-4 space-y-2 z-50"></div>
   <div id="modalRoot" class="fixed inset-0 hidden items-center justify-center bg-black/30 z-40">
